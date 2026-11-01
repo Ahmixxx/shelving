@@ -53,28 +53,33 @@ type AnyMapping = Record<string, ComponentType<any> | undefined>;
 export function createMapper(defaults: Mapping = {}): [Mapping: FunctionComponent<MappingProps>, Mapper: FunctionComponent<MapperProps>] {
 	const Context = createContext<AnyMapping>(defaults);
 
-	function Mapping({ mapping, children }: MappingProps): ReactNode {
-		const inherited = use(Context);
-		return <Context value={{ ...inherited, ...mapping }}>{children}</Context>;
-	}
+	// Both components must close over `Context`, so they can only exist inside this factory.
+	// They are created once per `createMapper()` call (never per render), so their identity is stable.
+	// They are defined as methods (not as nested declarations) to make that explicit.
+	const { Mapping, Mapper } = {
+		Mapping({ mapping, children }: MappingProps): ReactNode {
+			const inherited = use(Context);
+			return <Context value={{ ...inherited, ...mapping }}>{children}</Context>;
+		},
 
-	function Mapper({ children }: MapperProps): ReactNode {
-		const mapping = use(Context);
-		const items: ReactNode[] = [];
-		for (const element of walkElements(children)) {
-			if (typeof element.type !== "string") {
-				items.push(element);
-				continue;
+		Mapper({ children }: MapperProps): ReactNode {
+			const mapping = use(Context);
+			const items: ReactNode[] = [];
+			for (const element of walkElements(children)) {
+				if (typeof element.type !== "string") {
+					items.push(element);
+					continue;
+				}
+				const Component = mapping[element.type];
+				if (Component) {
+					items.push(<Component key={element.key} {...element.props} />);
+				} else {
+					items.push(element);
+				}
 			}
-			const Component = mapping[element.type];
-			if (Component) {
-				items.push(<Component key={element.key} {...element.props} />);
-			} else {
-				items.push(element);
-			}
-		}
-		return items;
-	}
+			return items;
+		},
+	};
 
 	return [Mapping, Mapper];
 }
