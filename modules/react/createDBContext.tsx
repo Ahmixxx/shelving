@@ -64,24 +64,31 @@ export function createDBContext<I extends Identifier, T extends Data>(provider: 
 		return cache;
 	}
 
-	function useItem(
-		collection: Nullish<Collection<string, I, T>>, //
-		id: Nullish<I>,
-	): ItemStore<I, T> | undefined {
-		return useStore(collection && id ? requireDBCache(useItem).getItem(collection, id) : undefined);
-	}
+	// The hooks and component must close over `CacheContext` and `provider`, so they can only exist inside this factory.
+	// They are created once per `createDBContext()` call (never per render), so their identity is stable.
+	// They are defined as methods of the returned bundle (not as nested declarations) to make that explicit.
+	const context = {
+		requireDBCache,
 
-	function useQuery(
-		collection: Nullish<Collection<string, I, T>>, //
-		query: Nullish<Query<Item<I, T>>>,
-	): QueryStore<I, T> | undefined {
-		return useStore(collection && query ? requireDBCache(useQuery).getQuery(collection, query) : undefined);
-	}
+		useItem(
+			collection: Nullish<Collection<string, I, T>>, //
+			id: Nullish<I>,
+		): ItemStore<I, T> | undefined {
+			return useStore(collection && id ? requireDBCache(context.useItem).getItem(collection, id) : undefined);
+		},
 
-	function DBContext({ children }: { children: ReactNode }): ReactElement {
-		const cache = useInstance(DBCache, provider);
-		return <CacheContext value={cache}>{children}</CacheContext>;
-	}
+		useQuery(
+			collection: Nullish<Collection<string, I, T>>, //
+			query: Nullish<Query<Item<I, T>>>,
+		): QueryStore<I, T> | undefined {
+			return useStore(collection && query ? requireDBCache(context.useQuery).getQuery(collection, query) : undefined);
+		},
 
-	return { requireDBCache, useItem, useQuery, DBContext } as DBContext<I, T>;
+		DBContext({ children }: { children: ReactNode }): ReactElement {
+			const cache = useInstance(DBCache, provider);
+			return <CacheContext value={cache}>{children}</CacheContext>;
+		},
+	};
+
+	return context as DBContext<I, T>;
 }

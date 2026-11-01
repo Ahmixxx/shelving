@@ -45,14 +45,21 @@ export function createAPIContext<P, R>(provider: APIProvider<P, R>): APIContext<
 		return cache;
 	}
 
-	function useAPI<PP extends P, RR extends R>(endpoint: Nullish<Endpoint<PP, RR>>, payload: PP): EndpointStore<PP, RR> | undefined {
-		return useStore(endpoint ? requireAPICache(useAPI).get(endpoint).get(payload) : undefined);
-	}
+	// The hook and component must close over `CacheContext` and `provider`, so they can only exist inside this factory.
+	// They are created once per `createAPIContext()` call (never per render), so their identity is stable.
+	// They are defined as methods of the returned bundle (not as nested declarations) to make that explicit.
+	const context = {
+		requireAPICache,
 
-	function APIContext({ children }: ChildProps): ReactElement {
-		const cache = useInstance(APICache, provider);
-		return <CacheContext value={cache}>{children}</CacheContext>;
-	}
+		useAPI<PP extends P, RR extends R>(endpoint: Nullish<Endpoint<PP, RR>>, payload: PP): EndpointStore<PP, RR> | undefined {
+			return useStore(endpoint ? requireAPICache(context.useAPI).get(endpoint).get(payload) : undefined);
+		},
 
-	return { requireAPICache, useAPI, APIContext } as APIContext<P, R>;
+		APIContext({ children }: ChildProps): ReactElement {
+			const cache = useInstance(APICache, provider);
+			return <CacheContext value={cache}>{children}</CacheContext>;
+		},
+	};
+
+	return context as APIContext<P, R>;
 }
